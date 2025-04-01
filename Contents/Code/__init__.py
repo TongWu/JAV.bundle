@@ -160,11 +160,56 @@ class JAVAgent(Agent.Movies):
                     obj = getattr(metadata, key).new()
                     for item_key, item_value in item.items():
                         setattr(obj, item_key, item_value)
+                        
+            # Original Code Logic: Fetch DMM poster only
+            # elif key in ("posters", "art"):
+                # for image_url in value:
+                    # getattr(metadata, key)[image_url] = Proxy.Preview(
+                        # HTTP.Request(image_url).content)
 
-            elif key in ("posters", "art"):
+            # New Code Logic: Use local poster first, if not then search in DMM (low resolution)
+            elif key == "posters":
+                # Try local image first
+                folder_path = os.path.dirname(media.items[0].parts[0].file)
+                local_posters = [
+                    os.path.join(folder_path, name) for name in [
+                        'poster.jpg', 'folder.jpg', 'cover.jpg', 'default.jpg', 'movie.jpg'
+                    ]
+                ]
+                for filename in os.listdir(folder_path):
+                    if filename.endswith('-poster.jpg') or filename.endswith('.tbn') or filename.endswith('.jpg'):
+                        local_posters.append(os.path.join(folder_path, filename))
+
+                local_poster = None
+                for poster in local_posters:
+                    if os.path.exists(poster):
+                        local_poster = poster
+                        break
+
+                if local_poster:
+                    try:
+                        with open(local_poster, "rb") as f:
+                            metadata.posters[local_poster] = Proxy.Media(f.read())
+                        Log("Use Local Poster: {}".format(local_poster))
+                    except Exception as e:
+                        Log.Exception("Failed to read local poster: %s", e)
+                else:
+                    # Fallback to remote
+                    for image_url in value:
+                        try:
+                            metadata.posters[image_url] = Proxy.Preview(
+                                HTTP.Request(image_url).content)
+                        except Exception as e:
+                            Log.Exception("Failed to download poster: %s", e)
+
+            elif key == "art":
                 for image_url in value:
-                    getattr(metadata, key)[image_url] = Proxy.Preview(
-                        HTTP.Request(image_url).content)
+                    try:
+                        metadata.art[image_url] = Proxy.Preview(
+                            HTTP.Request(image_url).content)
+                    except Exception as e:
+                        Log.Exception("Failed to download art: %s", e)
+
 
             elif key in ("genres", "collections"):
                 for title in value:
